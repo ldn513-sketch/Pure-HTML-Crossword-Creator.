@@ -1,0 +1,11 @@
+# Binaires compilés
+wordfind
+
+# Fichiers objets
+*.o
+*.obj
+
+# Fichiers de sauvegarde
+*~
+*.bak
+*.swp
