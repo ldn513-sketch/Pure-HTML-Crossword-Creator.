@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crossword Editor - IPUZ Graphical Editor</title>
+    <link rel="stylesheet" href="css/editor.css">
+    <link rel="stylesheet" href="css/grid.css">
+</head>
+<body>
+    <div class="editor-container">
+        <!-- Main area -->
+        <div class="editor-main">
+            <!-- Header -->
+            <div class="editor-header">
+                <h1>Crossword Editor</h1>
+                <p>IPUZ Graphical Editor - Pure HTML/CSS/JS</p>
+            </div>
+
+            <!-- Toolbar -->
+            <div class="toolbar">
+                <!-- File operations -->
+                <div class="toolbar-group">
+                    <button class="btn" id="btn-new" title="New crossword">
+                        New
+                    </button>
+                    <button class="btn" id="btn-open" title="Open IPUZ file">
+                        Open
+                    </button>
+                    <input type="file" id="file-input" class="file-input" accept=".ipuz,.json">
+                    <button class="btn btn-primary" id="btn-save" title="Download IPUZ file">
+                        Save
+                    </button>
+                </div>
+
+                <!-- Edit operations -->
+                <div class="toolbar-group">
+                    <button class="btn btn-icon" id="btn-undo" title="Undo (Ctrl+Z)">
+                        &#x21B6;
+                    </button>
+                    <button class="btn btn-icon" id="btn-redo" title="Redo (Ctrl+Y)">
+                        &#x21B7;
+                    </button>
+                </div>
+
+                <!-- Grid operations -->
+                <div class="toolbar-group">
+                    <button class="btn" id="btn-autonumber" title="Auto-number grid">
+                        Auto #
+                    </button>
+                    <button class="btn" id="btn-clear" title="Clear letters">
+                        Clear
+                    </button>
+                    <button class="btn" id="btn-reveal" title="Reveal solution">
+                        Reveal
+                    </button>
+                </div>
+
+                <!-- Grid size -->
+                <div class="toolbar-group">
+                    <div class="input-group">
+                        <label>W:</label>
+                        <input type="number" id="input-width" value="15" min="3" max="30">
+                    </div>
+                    <div class="input-group">
+                        <label>H:</label>
+                        <input type="number" id="input-height" value="15" min="3" max="30">
+                    </div>
+                    <button class="btn" id="btn-resize" title="Resize grid">
+                        Resize
+                    </button>
+                </div>
+
+                <!-- Mode toggle -->
+                <div class="toolbar-group">
+                    <div class="mode-toggle">
+                        <button id="mode-solution" class="active" title="Edit solution">Solution</button>
+                        <button id="mode-play" title="Play mode">Play</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grid -->
+            <div class="grid-container">
+                <div id="crossword-grid"></div>
+            </div>
+
+            <!-- Status bar -->
+            <div class="status-bar">
+                <div class="status-item">
+                    <span id="status-position">-</span>
+                </div>
+                <div class="status-item">
+                    <span id="status-direction">Horizontal</span>
+                </div>
+                <div class="status-item">
+                    <span id="status-word">-</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="editor-sidebar">
+            <!-- Metadata -->
+            <div class="metadata-form">
+                <h3>Puzzle Info</h3>
+                <div class="form-field">
+                    <label for="meta-title">Title</label>
+                    <input type="text" id="meta-title" placeholder="Puzzle title">
+                </div>
+                <div class="form-field">
+                    <label for="meta-author">Author</label>
+                    <input type="text" id="meta-author" placeholder="Author name">
+                </div>
+                <div class="form-field">
+                    <label for="meta-copyright">Copyright</label>
+                    <input type="text" id="meta-copyright" placeholder="Copyright info">
+                </div>
+                <div class="form-field">
+                    <label for="meta-notes">Notes</label>
+                    <textarea id="meta-notes" rows="2" placeholder="Additional notes"></textarea>
+                </div>
+            </div>
+
+            <!-- Clue editor -->
+            <div id="clue-editor"></div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/ipuz-parser.js"></script>
+    <script src="js/grid-model.js"></script>
+    <script src="js/command-api.js"></script>
+    <script src="js/grid-view.js"></script>
+    <script src="js/clue-editor.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        // UI Controller
+        document.addEventListener('DOMContentLoaded', function() {
+            // Wait for editor initialization
+            setTimeout(function() {
+                if (!window.editor || !window.crossword) return;
+
+                const model = window.crossword.model;
+                const commands = window.crossword.commands;
+                const gridView = window.crossword.gridView;
+
+                // File operations
+                document.getElementById('btn-new').addEventListener('click', function() {
+                    if (confirm('Create a new crossword? Unsaved changes will be lost.')) {
+                        const w = parseInt(document.getElementById('input-width').value) || 15;
+                        const h = parseInt(document.getElementById('input-height').value) || 15;
+                        window.editor.newCrossword(w, h, 'New Crossword');
+                        window.crossword.autoNumber();
+                    }
+                });
+
+                document.getElementById('btn-open').addEventListener('click', function() {
+                    document.getElementById('file-input').click();
+                });
+
+                document.getElementById('file-input').addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    if (file) {
+                        window.editor.loadFromFile(file).then(function(success) {
+                            if (success) {
+                                updateMetadataFields();
+                                updateSizeInputs();
+                            } else {
+                                alert('Failed to load file');
+                            }
+                        });
+                    }
+                    e.target.value = '';
+                });
+
+                document.getElementById('btn-save').addEventListener('click', function() {
+                    const title = model.metadata.title || 'crossword';
+                    const filename = title.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.ipuz';
+                    window.crossword.download(filename);
+                });
+
+                // Edit operations
+                document.getElementById('btn-undo').addEventListener('click', function() {
+                    window.crossword.undo();
+                });
+
+                document.getElementById('btn-redo').addEventListener('click', function() {
+                    window.crossword.redo();
+                });
+
+                // Grid operations
+                document.getElementById('btn-autonumber').addEventListener('click', function() {
+                    window.crossword.autoNumber();
+                });
+
+                document.getElementById('btn-clear').addEventListener('click', function() {
+                    if (confirm('Clear all letters?')) {
+                        window.crossword.clear();
+                    }
+                });
+
+                document.getElementById('btn-reveal').addEventListener('click', function() {
+                    window.crossword.reveal();
+                });
+
+                // Resize
+                document.getElementById('btn-resize').addEventListener('click', function() {
+                    const w = parseInt(document.getElementById('input-width').value) || 15;
+                    const h = parseInt(document.getElementById('input-height').value) || 15;
+                    if (confirm(`Resize grid to ${w}x${h}?`)) {
+                        window.crossword.resize(w, h);
+                        window.crossword.autoNumber();
+                    }
+                });
+
+                // Mode toggle
+                document.getElementById('mode-solution').addEventListener('click', function() {
+                    this.classList.add('active');
+                    document.getElementById('mode-play').classList.remove('active');
+                    gridView.setEditMode('solution');
+                    gridView.setShowSolution(false);
+                });
+
+                document.getElementById('mode-play').addEventListener('click', function() {
+                    this.classList.add('active');
+                    document.getElementById('mode-solution').classList.remove('active');
+                    gridView.setEditMode('value');
+                    gridView.setShowSolution(false);
+                });
+
+                // Metadata fields
+                document.getElementById('meta-title').addEventListener('change', function(e) {
+                    window.crossword.setTitle(e.target.value);
+                });
+
+                document.getElementById('meta-author').addEventListener('change', function(e) {
+                    window.crossword.setAuthor(e.target.value);
+                });
+
+                document.getElementById('meta-copyright').addEventListener('change', function(e) {
+                    commands.setMetadata('copyright', e.target.value);
+                });
+
+                document.getElementById('meta-notes').addEventListener('change', function(e) {
+                    commands.setMetadata('notes', e.target.value);
+                });
+
+                // Status updates
+                gridView.on('cellSelect', function(data) {
+                    document.getElementById('status-position').textContent =
+                        `Row ${data.row + 1}, Col ${data.col + 1}`;
+                });
+
+                gridView.on('directionChange', function(data) {
+                    document.getElementById('status-direction').textContent =
+                        data.direction === 'across' ? 'Horizontal' : 'Vertical';
+                });
+
+                gridView.on('wordSelect', function(data) {
+                    if (data.word) {
+                        const clue = model.getClue(data.direction, data.word.number);
+                        document.getElementById('status-word').textContent =
+                            `${data.word.number} ${data.direction}: ${clue ? clue.clue : '(no clue)'}`;
+                    }
+                });
+
+                // Keyboard shortcuts
+                document.addEventListener('keydown', function(e) {
+                    if (e.ctrlKey || e.metaKey) {
+                        switch(e.key.toLowerCase()) {
+                            case 'z':
+                                e.preventDefault();
+                                if (e.shiftKey) {
+                                    window.crossword.redo();
+                                } else {
+                                    window.crossword.undo();
+                                }
+                                break;
+                            case 'y':
+                                e.preventDefault();
+                                window.crossword.redo();
+                                break;
+                            case 's':
+                                e.preventDefault();
+                                document.getElementById('btn-save').click();
+                                break;
+                            case 'o':
+                                e.preventDefault();
+                                document.getElementById('btn-open').click();
+                                break;
+                        }
+                    }
+                });
+
+                // History state updates
+                commands.on('historyChange', function(data) {
+                    document.getElementById('btn-undo').disabled = !data.canUndo;
+                    document.getElementById('btn-redo').disabled = !data.canRedo;
+                });
+
+                // Helper functions
+                function updateMetadataFields() {
+                    document.getElementById('meta-title').value = model.metadata.title || '';
+                    document.getElementById('meta-author').value = model.metadata.author || '';
+                    document.getElementById('meta-copyright').value = model.metadata.copyright || '';
+                    document.getElementById('meta-notes').value = model.metadata.notes || '';
+                }
+
+                function updateSizeInputs() {
+                    document.getElementById('input-width').value = model.width;
+                    document.getElementById('input-height').value = model.height;
+                }
+
+                // Initial state
+                document.getElementById('btn-undo').disabled = true;
+                document.getElementById('btn-redo').disabled = true;
+
+            }, 100);
+        });
+    </script>
+</body>
+</html>
